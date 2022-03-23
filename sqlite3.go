@@ -1042,6 +1042,8 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 	synchronousMode := "NORMAL"
 	writableSchema := -1
 	vfsName := ""
+	kdfIterTimes := 0
+	defaultkdfIterTimes := 0
 
 	// SQLCipher PRAGMA's
 	pragmaKey := ""
@@ -1387,6 +1389,24 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			pragmaCipherPageSize = pageSize
 		}
 
+		// _pragma_kdf_iter
+		if val := params.Get("_pragma_kdf_iter"); val != "" {
+			pageSize, err := strconv.Atoi(val)
+			if err != nil {
+				return nil, fmt.Errorf("sqlite3: _pragma_cipher_page_size cannot be parsed: %s", err)
+			}
+			kdfIterTimes = pageSize
+		}
+
+		// _pragma_kdf_iter
+		if val := params.Get("_pragma_default_kdf_iter"); val != "" {
+			pageSize, err := strconv.Atoi(val)
+			if err != nil {
+				return nil, fmt.Errorf("sqlite3: _pragma_cipher_page_size cannot be parsed: %s", err)
+			}
+			defaultkdfIterTimes = pageSize
+		}
+
 		if !strings.HasPrefix(dsn, "file:") {
 			dsn = dsn[:pos]
 		}
@@ -1430,6 +1450,24 @@ func (d *SQLiteDriver) Open(dsn string) (driver.Conn, error) {
 			return lastError(db)
 		}
 		return nil
+	}
+
+	if kdfIterTimes > 0 {
+		query := fmt.Sprintf("PRAGMA kdf_iter = '%d';",
+			kdfIterTimes)
+		if err := exec(query); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
+	}
+
+	if defaultkdfIterTimes > 0 {
+		query := fmt.Sprintf("PRAGMA cipher_default_kdf_iter = '%d';",
+			defaultkdfIterTimes)
+		if err := exec(query); err != nil {
+			C.sqlite3_close_v2(db)
+			return nil, err
+		}
 	}
 
 	// _pragma_key
